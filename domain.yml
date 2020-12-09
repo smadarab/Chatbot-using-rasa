@@ -1,0 +1,106 @@
+actions:
+- action_check_city
+- action_decide_email
+- action_search_restaurants
+- action_send_email
+- action_validate_cuisine
+- utter_ask_budget
+- utter_ask_cuisine
+- utter_ask_email
+- utter_ask_howcanhelp
+- utter_ask_location
+- utter_ask_mailconfirmation
+- utter_confirm_email
+- utter_default
+- utter_goodbye
+- utter_greet
+- utter_sendmail
+entities:
+- '"entity"'
+- budget
+- cuisine
+- decide_email
+- email
+- location
+- mail
+- mailconfirmation
+- people
+- price
+intents:
+- ask_budget
+- ask_mailconfirmation
+- ask_cuisine
+- ask-location
+- restaurant_search
+- greet
+- ask_email
+- goodbye
+- stop
+- affirm
+- decide_email
+responses:
+  utter_ask_budget:
+  - buttons:
+    - payload: '/ask_budget{"budget": "299"}'
+      title: Lesser than Rs. 300
+    - payload: '/ask_budget{"budget": "700"}'
+      title: Rs. 300 to 700
+    - payload: '/ask_budget{"budget": "701"}'
+      title: More than Rs. 700
+    text: What would be your preferred budget?please provide in range ex.:<300,>700,300
+      to 700 range
+  utter_ask_cuisine:
+  - buttons:
+    - payload: Chinese
+      title: Chinese
+    - payload: Mexican
+      title: Mexican
+    - payload: Italian
+      title: Italian
+    - payload: American
+      title: American
+    - payload: South Indian
+      title: South Indian
+    - payload: North Indian
+      title: North Indian
+    text: what kind of cuisine would you like?
+  utter_ask_email:
+  - text: Please provide your email id.
+  utter_ask_howcanhelp:
+  - text: how can I help you?
+  utter_ask_location:
+  - text: In what location?
+  utter_ask_mailconfirmation:
+  - buttons:
+    - payload: '/ask_mailconfirmation{"mailconfirmation": "Yes"}'
+      title: Yes
+    - payload: '/ask_mailconfirmation{"mailconfirmation": "No"}'
+      title: No
+    text: Should I send you details of all the restaurants on email?
+  utter_confirm_email:
+  - text: An email has been sent to you.
+  utter_default:
+  - text: i cannot understand
+  utter_goodbye:
+  - text: goodbye :(
+  - text: Bye-bye
+  utter_greet:
+  - text: hey there! How may i help you
+  - text: Hi, How can I help you!
+  - text: Hey, How is it going. How May I help you Today
+session_config:
+  carry_over_slots_to_new_session: true
+  session_expiration_time: 0
+slots:
+  budget:
+    type: text
+  cuisine:
+    type: text
+  email:
+    type: text
+  email_message:
+    type: text
+  location:
+    type: text
+  mailconfirmation:
+    type: text

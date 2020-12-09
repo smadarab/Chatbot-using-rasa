@@ -1,0 +1,311 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+import time
+import sys
+from rasa_sdk import Action
+from rasa_sdk.events import SlotSet
+import zomatopy
+import json
+import smtplib 
+from email.mime.multipart import MIMEMultipart 
+from email.mime.text import MIMEText 
+from email.mime.base import MIMEBase 
+import re
+from email import encoders 
+from rasa_sdk.events import AllSlotsReset
+respose_email=[]
+class ActionSearchRestaurants(Action):
+	def name(self):
+		return 'action_search_restaurants'
+		
+	def run(self, dispatcher, tracker, domain):
+		config={ "user_key":"25f03a5cc863b8000a5f896f96db9260"}
+		zomato = zomatopy.initialize_app(config)
+		loc = tracker.get_slot('location')
+		cuisine = tracker.get_slot('cuisine')
+		budget = tracker.get_slot('budget')
+		print(budget)
+		import re
+		num = re.findall(r'[0-9]{1,}',budget)
+		num =[int(i)for i in num]
+		if len(num)<2 and num[0]<=300:
+			budget = 299
+		if len(num)<2 and num[0]>=700:
+			budget =701
+		if len(num)==2:
+			for i in range(num[0],num[1]):
+				if i in range(300,700):
+					budget = 700
+		location_detail=zomato.get_location(loc,1)
+		d1 = json.loads(location_detail)
+		lat=d1["location_suggestions"][0]["latitude"]
+		lon=d1["location_suggestions"][0]["longitude"]
+		cuisines_dict={'bakery':5,'chinese':25,'cafe':30,'italian':55,'biryani':7,'north indian':50,'south indian':85,'mexican':73,'american':996}
+		results=zomato.restaurant_search("", lat, lon, str(cuisines_dict.get(cuisine)),800)
+		d = json.loads(results)
+		global response,rateing_list
+		response=[]
+		rateing_list=[]
+		counter = 0
+		if d['results_found'] == 0:
+			response= "no results"
+		else:
+			for restaurant in d['restaurants']:   
+				value = int(restaurant['restaurant']['average_cost_for_two'])
+				#print(value)
+				if budget == 299 and value > 0 and value< budget :
+					counter = counter+1
+					if counter>5:
+						#print("in break")
+						break; 
+					rateing_list.append(float(restaurant['restaurant']['user_rating']['aggregate_rating']))   
+					response.append(restaurant['restaurant']['name']+ " in "+ restaurant['restaurant']['location']['address']+" has been rated "+restaurant['restaurant']['user_rating']['aggregate_rating'])
+				if budget == 700 and value>=300 and value<=budget:
+					counter = counter+1
+					if counter>5:
+						#print("in break")
+						break;
+					rateing_list.append(float(restaurant['restaurant']['user_rating']['aggregate_rating']))   
+					response.append(restaurant['restaurant']['name']+ " in "+ restaurant['restaurant']['location']['address']+" has been rated "+str(restaurant['restaurant']['user_rating']['aggregate_rating']))                                  
+				if budget == 701 and  value>701 :
+					counter = counter+1
+					if counter>5:
+						#print("in break")
+						break;
+					rateing_list.append(float(restaurant['restaurant']['user_rating']['aggregate_rating']))   
+					response.append(restaurant['restaurant']['name']+ " in "+ restaurant['restaurant']['location']['address']+" has been rated "+str(restaurant['restaurant']['user_rating']['aggregate_rating']))
+		dictOfWords = dict(zip(rateing_list, response))
+		if len(response)>0:
+			l=list(dictOfWords.items()) 
+			l.sort(reverse=True)
+			dispatcher.utter_message("Showing you top rated restaurants")
+			for i in range(len(l)):
+				print(l[i][1])
+				dispatcher.utter_message("-----"+l[i][1])
+		else:
+			dispatcher.utter_message("Showing you top rated restaurants")
+			dispatcher.utter_message("==> We are sorry currently there are no restaurents that match your choice of preferences :( <==")                  
+
+
+"""Custom action to decide on whether to send email or not
+"""
+class ActionDecideEmail(Action):
+	def name(self):
+		return "action_decide_email"
+	def run(self, dispatcher, tracker, domain):
+		email_id = tracker.get_slot("email")
+		mail_confirmation = tracker.get_slot('mailconfirmation')
+		print(mail_confirmation)
+		affirmations_mail =['yes','yeah','yup', 'allright','all right','alright','very well','verywell','offcourse','of course','ofcourse','by all means','byallmeans','sure','certainly','absolutely','indeed','affirmative','in the affirmative','intheaffirmative'
+							'agreed','roger','aye','ayeaye','aye aye','yeah','yah','yep','yup','uh-huh','okay','OK','okey-dokey','okey-doke','achcha','righto','righty-ho','surely','please'] 
+		if mail_confirmation.replace(" ","").lower() in affirmations_mail and email_id is None:
+			dispatcher.utter_message(template="utter_ask_email")   
+		elif mail_confirmation.lower() not in affirmations_mail :
+			dispatcher.utter_message("Have a happy day :)")
+			return [AllSlotsReset()]
+		elif email_id is not None:
+			import re
+			regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
+			if(re.match(regex,email_id)): 
+				dispatcher.utter_message("thanks for entering valid email id ") 
+				
+			else:
+				dispatcher.utter_message("entered invalid id")
+				dispatcher.utter_message(template="utter_ask_email") 
+		
+				 
+
+			
+""" Custom action to send an email
+"""
+class ActionSendEmail(Action):
+
+	def name(self):
+		return "action_send_email"
+
+	def run(self, dispatcher, tracker, domain):
+		config={ "user_key":"25f03a5cc863b8000a5f896f96db9260"}
+		zomato = zomatopy.initialize_app(config)
+		loc = tracker.get_slot('location')
+		cuisine = tracker.get_slot('cuisine')
+		budget = tracker.get_slot('budget')
+		print(budget)
+		print(budget)
+		import re
+		num = re.findall(r'[0-9]{1,}',budget)
+		num =[int(i)for i in num]
+		if len(num)<2 and num[0]<=300:
+			budget = 299
+		if len(num)<2 and num[0]>=700:
+			budget =701
+		if len(num)==2:
+			for i in range(num[0],num[1]):
+				if i in range(300,700):
+					budget = 700
+		email_id = tracker.get_slot("email") 
+		print(email_id)
+		regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
+		if(re.match(regex,email_id)): 
+			dispatcher.utter_message("initiating email...emailid looks good ") 
+			location_detail=zomato.get_location(loc, 1)
+			d1 = json.loads(location_detail)
+			lat=d1["location_suggestions"][0]["latitude"]
+			lon=d1["location_suggestions"][0]["longitude"]
+			#cuisines_dict={'bakery':5,'chinese':25,'cafe':30,'italian':55,'biryani':7,'north indian':50,'south indian':85}
+			cuisines_dict={'bakery':5,'chinese':25,'cafe':30,'italian':55,'biryani':7,'north indian':50,'south indian':85,'mexican':73,'american':996}
+			results=zomato.restaurant_search("", lat, lon, str(cuisines_dict.get(cuisine)),800)
+			d = json.loads(results)
+			global response,rateing_list
+			response=[]
+			rateing_list=[]
+			counter = 0
+			if d['results_found'] == 0:
+				response= "no results"
+			else:
+				for restaurant in d['restaurants']:   
+					value = int(restaurant['restaurant']['average_cost_for_two'])
+					print(value)
+					if budget == 299 and value > 0 and value< budget :
+						counter = counter+1
+						if counter>10:
+							print("in break")
+							break; 
+						rateing_list.append(float(restaurant['restaurant']['user_rating']['aggregate_rating']))   
+						response.append(restaurant['restaurant']['name']+ " in "+ restaurant['restaurant']['location']['address']+" has been rated "+restaurant['restaurant']['user_rating']['aggregate_rating'])
+					if budget == 700 and value>=300 and value<=budget:
+						counter = counter+1
+						if counter>10:
+							print("in break")
+							break;
+						rateing_list.append(float(restaurant['restaurant']['user_rating']['aggregate_rating']))   
+						response.append(restaurant['restaurant']['name']+ " in "+ restaurant['restaurant']['location']['address']+" has been rated "+str(restaurant['restaurant']['user_rating']['aggregate_rating']))                                  
+					if budget == 701 and  value>701 :
+						counter = counter+1
+						if counter>10:
+							print("in break")
+							break;
+						rateing_list.append(float(restaurant['restaurant']['user_rating']['aggregate_rating']))   
+						response.append(restaurant['restaurant']['name']+ " in "+ restaurant['restaurant']['location']['address']+" has been rated "+str(restaurant['restaurant']['user_rating']['aggregate_rating']))    
+			respose_email = response
+			fromaddr = "upgradchatbotassignment@gmail.com"
+					
+			# instance of MIMEMultipart 
+			msg = MIMEMultipart() 
+			
+			#storing the senders mail adress
+			msg['From'] = fromaddr 
+	
+			# storing the receivers email address  
+			msg['To'] = email_id 
+	
+			# storing the subject  
+			msg['Subject'] = "Top 10 restaurants of zomato by your preference"
+			body="Currently we found only top" +str(len(response))+"restaurants that match your choice"
+			if len(respose_email)>0:
+			# string to store the body of the mail 
+				dictOfWords = dict(zip(rateing_list, response))
+				l=list(dictOfWords.items()) 
+				l.sort(reverse=True)
+				for i in range(len(l)):
+					print(l[i][1])
+					body = body+"\n"+l[i][1]
+			else:
+				body = "==> We are sorry currently there are no restaurents that match your choice of preferences :( <=="
+			# attach the body with the msg instance 
+			msg.attach(MIMEText(body, 'plain')) 
+	
+			# instance of MIMEBase and named as p 
+			#p = MIMEBase('application', 'octet-stream') 
+	
+			# attach the instance 'p' to instance 'msg' 
+			#msg.attach(p) 
+	
+			# creates SMTP session 
+			s = smtplib.SMTP('smtp.gmail.com', 587) 
+	
+			# start TLS for security 
+			s.starttls() 
+	
+			# Authentication 
+			s.login(fromaddr,"upgrad123") 
+
+			# Converts the Multipart msg into a string 
+			text = msg.as_string() 
+			if email_id is not None:
+			# sending the mail 
+				try:
+					s.sendmail(fromaddr, email_id, text) 
+					dispatcher.utter_message("thanks for confirmation")
+					dispatcher.utter_message("Mail has been sent,Thank you")
+					dispatcher.utter_message("Have a happy day :)") 
+					s.quit()
+					return [AllSlotsReset()]    
+				except:
+					#dispatcher.utter_message("Oops!", sys.exc_info()[0], "occurred.")
+					dispatcher.utter_message("email sending failed")   
+		else:
+			print("in regex")
+			dispatcher.utter_message("entered invalid id")
+			dispatcher.utter_message(template="utter_ask_email") 
+			#email_id = tracker.get_slot("email")
+			#print("emailid in else",email_id)
+			#ActionSendEmail.run(self, dispatcher, tracker, domain)
+				 
+
+class ActionCheckCity(Action):
+	def name(self):
+		return 'action_check_city'
+		
+	def run(self, dispatcher, tracker, domain):
+		loc = tracker.get_slot('location')
+		loc = loc.title()
+		print("loc1" + loc)
+		response=""
+		cities= ["Ahmedabad","Bangalore","Chennai","Delhi","Delhi NCR","Hyderabad","Kolkata","Calcutta","Bombay","Benaras","Madras","Bengaluru",
+		   "Amdavad","Ahmadabad",
+		   "Mumbai","Pune","Agra","Ajmer","Aligarh","dilli","Amravati","Amritsar","Asansol","Aurangabad","Bareilly","Belgaum",
+		   "Bhavnagar","Bhiwandi","Bhopal","Bhubaneswar","Bikaner","Bilaspur","Bokaro Steel City","Chandigarh","Coimbatore",
+		   "Cuttack","Dehradun","Dhanbad","Bhilai","Durgapur","Erode","Faridabad","Firozabad","Ghaziabad","Gorakhpur","Gulbarga",
+		   "Guntur","Gwalior","Gurgaon","Guwahati","Hamirpur","Hubli–Dharwad","Indore","Jabalpur","Jaipur","Jalandhar","Jammu","Jamnagar",
+		   "Jamshedpur","Jhansi","Jodhpur","Kakinada","Kannur","Kanpur","Kochi","Kolhapur","Kollam","Kozhikode","Kurnool","Ludhiana","Lucknow","Madurai","Malappuram","Mathura",
+		   "Goa","Mangalore","Meerut","Moradabad","Mysore","Nagpur","Nanded","Nashik","Nellore","Noida","Patna","Pondicherry","Purulia","Prayagraj","Raipur","Rajkot",
+		   "Rajahmundry","Ranchi","Rourkela","Salem","Sangli","Shimla","Siliguri","Solapur","Srinagar","Surat","Thiruvananthapuram","Thrissur","Tiruchirappalli","Tiruppur",
+		   "Ujjain","Bijapur","Vadodara","Varanasi","Vasai-Virar City","Vijayawada","Visakhapatnam","Vellore","Warangal"]
+		if loc is not None:
+			if loc in cities:
+			#print('value  exists in file')
+				response= "We operate in " + loc
+				dispatcher.utter_message("-----"+response)
+				return [SlotSet('location',loc)]
+			else:
+			#print('value doesnot exists in file')
+				response= "We do not operate in this area yet.Try some other location"
+				dispatcher.utter_message("-----"+response)
+				dispatcher.utter_message(template="utter_ask_location")
+				return [SlotSet('location',None)] 
+		else:
+			dispatcher.utter_message("Sorry I could not understand the location you provided. try some other location")
+			dispatcher.utter_message(template = "utter_ask_location")
+			return[SlotSet('location', None)]
+
+
+class ActionValidateCuisine(Action):
+	def name(self):
+		return 'action_validate_cuisine'
+		
+	def run(self, dispatcher, tracker, domain):
+		list_cuisine = ["Chinese","Mexican","American","Italian","South Indian","North Indian","southindian","North Indian","south-indian","north-indian"]
+		cuisine = tracker.get_slot('cuisine')
+		cuisine = cuisine.strip().title()
+		if cuisine is not None:
+			if cuisine in list_cuisine:
+				return[SlotSet('cuisine',cuisine)]
+			else:
+				dispatcher.utter_message("Sorry this is not a valid cuisine. please select from the cuisine list  provided")
+				dispatcher.utter_message(template="utter_ask_cuisine")
+				return[SlotSet('cuisine',None)]
+		else:
+			dispatcher.utter_message("Sorry I could not understand the cuisine name you provided")
+			dispatcher.utter_message(template="utter_ask_cuisine")
+			return[SlotSet('cuisine', None)]
